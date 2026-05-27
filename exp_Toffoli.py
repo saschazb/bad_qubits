@@ -48,24 +48,10 @@ def create_noise_model(error_rate: float, noisy_qubits: list) -> NoiseModel:
     noise_model = NoiseModel()
     p = float(error_rate)
 
-    # Single-qubit bit-flip error
+    # Single-qubit bit-flip error on explicit identity operations before the CCX
     single = pauli_error([('I', 1 - p), ('X', p)])
     for q in noisy_qubits:
-        noise_model.add_quantum_error(single, ['h', 'x', 'y', 'z'], [q])
-
-    # Prepare two-qubit Pauli errors for all pairs used in Toffoli decompositions
-    pairs = [(0,1), (0,2), (1,2)]
-    for a,b in pairs:
-        pa = p if a in noisy_qubits else 0.0
-        pb = p if b in noisy_qubits else 0.0
-        probs = {
-            'II': (1-pa)*(1-pb),
-            'XI': pa*(1-pb),
-            'IX': (1-pa)*pb,
-            'XX': pa*pb,
-        }
-        two = pauli_error([(k, v) for k,v in probs.items()])
-        noise_model.add_quantum_error(two, ['cx'], [a, b])
+        noise_model.add_quantum_error(single, ['id'], [q])
 
     return noise_model
 
@@ -101,6 +87,11 @@ def calculate_toffoli_fidelity(c0_state: str, c1_state: str, target_state: str,
         qc_noisy.x(1)
     if target_state == '1':
         qc_noisy.x(2)
+
+    # Apply pre-gate identity operations on all qubits, allowing the noise channel to act before CCX
+    qc_noisy.id(0)
+    qc_noisy.id(1)
+    qc_noisy.id(2)
     qc_noisy.ccx(0, 1, 2)
     try:
         qc_noisy.save_density_matrix()

@@ -81,30 +81,9 @@ def create_noise_model(error_rate: float, noisy_qubits: list) -> NoiseModel:
     # Single-qubit bit-flip error: I with prob 1-p, X with prob p
     single_qubit_error = pauli_error([('I', 1 - p), ('X', p)])
 
-    # Add single-qubit errors to specified qubits for common single-qubit gates
+    # Add single-qubit errors to specified qubits on explicit pre-gate identity channels
     for qubit in noisy_qubits:
-        noise_model.add_quantum_error(single_qubit_error, ['h', 'x', 'y', 'z'], [qubit])
-
-    # Two-qubit error for the CNOT between qubit 0 and 1.
-    # Determine per-qubit flip probabilities depending on whether each
-    # qubit is marked noisy.
-    p0 = p if 0 in noisy_qubits else 0.0
-    p1 = p if 1 in noisy_qubits else 0.0
-
-    probs_II = (1 - p0) * (1 - p1)
-    probs_XI = p0 * (1 - p1)
-    probs_IX = (1 - p0) * p1
-    probs_XX = p0 * p1
-
-    two_qubit_error = pauli_error([
-        ('II', probs_II),
-        ('XI', probs_XI),
-        ('IX', probs_IX),
-        ('XX', probs_XX),
-    ])
-
-    # Attach two-qubit error to the CNOT gate (0 -> 1)
-    noise_model.add_quantum_error(two_qubit_error, ['cx'], [0, 1])
+        noise_model.add_quantum_error(single_qubit_error, ['id'], [qubit])
 
     return noise_model
 
@@ -158,6 +137,12 @@ def calculate_cnot_fidelity(control_state: str = '0', target_state: str = '0',
         qc_noisy.x(0)
     if target_state == '1':
         qc_noisy.x(1)
+
+    # Apply pre-gate identity operations on noisy qubits so the noise channel acts before the CNOT
+    if noise_model is not None:
+        qc_noisy.id(0)
+        qc_noisy.id(1)
+
     qc_noisy.cx(0, 1)
     # Request that the Aer simulator returns the final density matrix
     try:
